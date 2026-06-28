@@ -3,7 +3,7 @@ import crypto from 'crypto';
 
 // In-memory cache to store anonymized IP hash request timestamps.
 // To ensure GDPR/CCPA compliance and protect user privacy, we NEVER store raw IP addresses.
-// Instead, we store a one-way cryptographic SHA-256 hash of the IP.
+// Instead, we store a one-way cryptographic SHA-256 hash of the IP + User-Agent combination.
 const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
 
 const REQUEST_LIMIT = 3; // Maximum requests allowed per window
@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
     const forwardedFor = request.headers.get('x-forwarded-for');
     const realIp = request.headers.get('x-real-ip');
     const vercelIp = request.headers.get('x-vercel-forwarded-for');
+    const userAgent = request.headers.get('user-agent') || '';
 
     if (forwardedFor) {
       clientIp = forwardedFor.split(',')[0].trim();
@@ -97,15 +98,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3. Anonymize the IP using SHA-256 hashing (Ethical & GDPR-compliant privacy guard)
-    const hashedIp = crypto
+    // 3. Anonymize using SHA-256 hashing (Ethical, GDPR-compliant device tracking)
+    // We combine the IP address and User-Agent string to uniquely identify the browser/device.
+    // This prevents blocking different users connected to the same Wi-Fi network.
+    const clientSignature = `${clientIp}-${userAgent}`;
+    const hashedClient = crypto
       .createHash('sha256')
-      .update(clientIp)
+      .update(clientSignature)
       .digest('hex');
 
     // 4. Perform Rate Limiting check on the hashed identifier
-    if (isRateLimited(hashedIp)) {
-      console.warn(`⚠️ Rate limit exceeded for anonymized client: ${hashedIp.substring(0, 8)}...`);
+    if (isRateLimited(hashedClient)) {
+      console.warn(`⚠️ Rate limit exceeded for anonymized client: ${hashedClient.substring(0, 8)}...`);
       return NextResponse.json(
         { error: 'Too many requests. Please wait 30 seconds before trying again.' },
         { status: 429 }
