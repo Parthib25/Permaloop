@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
 // In-memory cache to store anonymized IP hash request timestamps.
@@ -54,26 +54,56 @@ function isRateLimited(hashedIp: string): boolean {
   return false;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    // 1. Retrieve Client IP Address
+    // 1. Retrieve Client IP Address from request headers
+    let clientIp = '';
+    let resolvedVia = 'none';
+
     const forwardedFor = request.headers.get('x-forwarded-for');
     const realIp = request.headers.get('x-real-ip');
-    let clientIp = '127.0.0.1';
+    const vercelIp = request.headers.get('x-vercel-forwarded-for');
 
     if (forwardedFor) {
       clientIp = forwardedFor.split(',')[0].trim();
+      resolvedVia = 'x-forwarded-for';
     } else if (realIp) {
       clientIp = realIp.trim();
+      resolvedVia = 'x-real-ip';
+    } else if (vercelIp) {
+      clientIp = vercelIp.split(',')[0].trim();
+      resolvedVia = 'x-vercel-forwarded-for';
     }
 
-    // 2. Anonymize the IP using SHA-256 hashing (Ethical & GDPR-compliant privacy guard)
+    // Log the resolved client IP details to the server console (visible in Vercel logs)
+    if (clientIp) {
+      console.log(`ℹ️ resolved client IP: [${clientIp}] via header: [${resolvedVia}]`);
+    } else {
+      console.warn('⚠️ Client IP could not be resolved from standard headers.');
+    }
+
+    // 2. Strict validation fallback block
+    if (!clientIp) {
+      if (process.env.NODE_ENV === 'development') {
+        // Allow local development fallback to prevent blocking localhost tests
+        clientIp = '127.0.0.1';
+        console.log(`ℹ️ falling back to development local IP: [${clientIp}]`);
+      } else {
+        console.error('❌ Security check failed: Client IP could not be resolved from headers.');
+        return NextResponse.json(
+          { error: 'Security check failed: Client identity could not be verified.' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 3. Anonymize the IP using SHA-256 hashing (Ethical & GDPR-compliant privacy guard)
     const hashedIp = crypto
       .createHash('sha256')
       .update(clientIp)
       .digest('hex');
 
-    // 3. Perform Rate Limiting check on the hashed identifier
+    // 4. Perform Rate Limiting check on the hashed identifier
     if (isRateLimited(hashedIp)) {
       console.warn(`⚠️ Rate limit exceeded for anonymized client: ${hashedIp.substring(0, 8)}...`);
       return NextResponse.json(
@@ -82,7 +112,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 4. Parse input body
+    // 5. Parse input body
     const { name, contact, need } = await request.json();
 
     if (!name || !name.trim() || !contact || !contact.trim() || !need || !need.trim()) {
