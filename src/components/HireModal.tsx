@@ -34,36 +34,18 @@ export default function HireModal({ isOpen, onClose }: HireModalProps) {
 
     setStatus('submitting');
 
-    // Confirmed entry IDs via DevTools on the live /viewform page
-    // IMPORTANT: The form URL must end in /formResponse — NOT a forms.gle short link
-    const formUrl = process.env.NEXT_PUBLIC_GOOGLE_FORM_URL || '';
-    const nameField = process.env.NEXT_PUBLIC_GOOGLE_FORM_NAME_FIELD || 'entry.1976640981';
-    const contactField = process.env.NEXT_PUBLIC_GOOGLE_FORM_CONTACT_FIELD || 'entry.775958089';
-    const needField = process.env.NEXT_PUBLIC_GOOGLE_FORM_NEED_FIELD || 'entry.1440450007';
-
-    if (!formUrl || !formUrl.includes('/formResponse')) {
-      console.error(
-        '❌ Google Form URL is not configured correctly.\n' +
-        'It must end in /formResponse — not a forms.gle short link.\n' +
-        'Set NEXT_PUBLIC_GOOGLE_FORM_URL in .env.local and restart the dev server.'
-      );
-      setStatus('error');
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append(nameField, name);
-    formData.append(contactField, contact);
-    formData.append(needField, need);
-
     try {
-      // mode: 'no-cors' is required — Google Forms blocks CORS, response will be opaque
-      // The request still succeeds even though we can't read the response
-      await fetch(formUrl, {
+      const response = await fetch('/api/submit-hire', {
         method: 'POST',
-        body: formData,
-        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, contact, need }),
       });
+
+      if (!response.ok) {
+        throw new Error('Failed submission');
+      }
       
       setStatus('success');
       setName('');
@@ -76,7 +58,7 @@ export default function HireModal({ isOpen, onClose }: HireModalProps) {
         setStatus('idle');
       }, 2500);
     } catch (err) {
-      console.error('Google Form submission error:', err);
+      console.error('Submission proxy error:', err);
       setStatus('error');
     }
   };

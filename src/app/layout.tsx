@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import '@knadh/oat/oat.min.css';
 import './globals.css';
 import ThreeBackground from '@/components/ThreeBackground';
+import SecurityGuard from '@/components/SecurityGuard';
 
 export const metadata: Metadata = {
   title: 'Permaloop | Parthib Goswami | SDE-2 & Full Stack Developer',
@@ -31,6 +32,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        {/* Security Guard Blocker */}
+        <SecurityGuard />
+
         {/* Dynamic 3D Canvas Background */}
         <ThreeBackground />
         
