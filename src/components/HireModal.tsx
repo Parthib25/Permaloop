@@ -13,6 +13,7 @@ export default function HireModal({ isOpen, onClose }: HireModalProps) {
   const [contact, setContact] = useState('');
   const [need, setNeed] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -33,6 +34,7 @@ export default function HireModal({ isOpen, onClose }: HireModalProps) {
     if (!name || !contact || !need) return;
 
     setStatus('submitting');
+    setErrorMessage('');
 
     try {
       const response = await fetch('/api/submit-hire', {
@@ -44,7 +46,8 @@ export default function HireModal({ isOpen, onClose }: HireModalProps) {
       });
 
       if (!response.ok) {
-        throw new Error('Failed submission');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed submission');
       }
       
       setStatus('success');
@@ -59,6 +62,8 @@ export default function HireModal({ isOpen, onClose }: HireModalProps) {
       }, 2500);
     } catch (err) {
       console.error('Submission proxy error:', err);
+      const errMsg = err instanceof Error ? err.message : 'Something went wrong. Please check your network.';
+      setErrorMessage(errMsg);
       setStatus('error');
     }
   };
@@ -160,7 +165,7 @@ export default function HireModal({ isOpen, onClose }: HireModalProps) {
 
                 {status === 'error' && (
                   <p style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                    Something went wrong. Please check your network and try again.
+                    {errorMessage || 'Something went wrong. Please check your network and try again.'}
                   </p>
                 )}
 
